@@ -1,0 +1,142 @@
+{
+  "entities": {
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "A rental vehicle in the fleet",
+      "type": "object",
+      "properties": {
+        "plateNumber": { "type": "string" },
+        "make": { "type": "string" },
+        "model": { "type": "string" },
+        "year": { "type": "number" },
+        "status": { "type": "string", "enum": ["available", "rented", "maintenance", "archived"] },
+        "vin": { "type": "string" },
+        "mileage": { "type": "number" },
+        "dailyRate": { "type": "number" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "location": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "speed": { "type": "number" },
+            "heading": { "type": "number" }
+          }
+        },
+        "fuelLevel": { "type": "number" }
+      },
+      "required": ["plateNumber", "make", "model", "status"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "A client of the rental service",
+      "type": "object",
+      "properties": {
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": {
+          "type": "object",
+          "properties": {
+            "street": { "type": "string" },
+            "city": { "type": "string" },
+            "state": { "type": "string" },
+            "zip": { "type": "string" },
+            "country": { "type": "string" }
+          }
+        },
+        "birthday": { "type": "string", "format": "date-time" },
+        "driverLicense": {
+          "type": "object",
+          "properties": {
+            "number": { "type": "string" },
+            "expiry": { "type": "string", "format": "date-time" },
+            "imageUrl": { "type": "string" }
+          }
+        },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["firstName", "lastName", "email"]
+    },
+    "Reservation": {
+      "title": "Reservation",
+      "description": "A vehicle rental booking",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "vehicleId": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["quote", "confirmed", "active", "completed", "cancelled"] },
+        "totalAmount": { "type": "number" },
+        "depositStatus": { "type": "string", "enum": ["held", "released", "claimed"] }
+      },
+      "required": ["customerId", "vehicleId", "startDate", "endDate", "status"]
+    },
+    "Incident": {
+      "title": "Incident",
+      "description": "A fine or damage report related to a reservation",
+      "type": "object",
+      "properties": {
+        "reservationId": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reservationId", "type", "amount"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A system message alerting staff to critical events",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "warning", "critical", "success"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" },
+        "link": { "type": "string" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] }
+      },
+      "required": ["title", "message", "type", "timestamp", "read"]
+    }
+  },
+  "firestore": {
+    "/vehicles": {
+      "schema": "Vehicle",
+      "description": "Inventory of cars"
+    },
+    "/customers": {
+      "schema": "Customer",
+      "description": "Stored customer profiles"
+    },
+    "/reservations": {
+      "schema": "Reservation",
+      "description": "Booking records"
+    },
+    "/incidents": {
+      "schema": "Incident",
+      "description": "Fines and damage reports"
+    },
+    "/notifications": {
+      "schema": "Notification",
+      "description": "Real-time alerts for the fleet"
+    },
+    "/admins": {
+      "schema": {
+        "title": "Admin",
+        "type": "object",
+        "properties": {
+          "email": { "type": "string" },
+          "role": { "type": "string", "enum": ["super_admin", "admin"] },
+          "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["email", "role"]
+      },
+      "description": "Privileged users for management"
+    }
+  }
+}

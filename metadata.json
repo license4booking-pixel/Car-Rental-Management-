@@ -1,0 +1,17 @@
+{
+  "name": "Car Rental Management Tool",
+  "description": "A high-performance Car Rental Management System with real-time fleet tracking and modern operations control.",
+  "requestFramePermissions": [
+    "geolocation",
+    "screen-wake-lock",
+    "camera"
+  ],
+  "majorCapabilities": [
+    "Firebase Firestore",
+    "Firebase Authentication",
+    "Real-time Tracking",
+    "Fleet Management",
+    "Digital Rental Agreements",
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

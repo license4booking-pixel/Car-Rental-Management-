@@ -1,0 +1,183 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Default Allow for all authenticated users to edit everything
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    // --- Helpers ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn();
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // --- Entity Validations ---
+
+    function isValidVehicle(v) {
+      return v.keys().hasAll(['plateNumber', 'make', 'model', 'status'])
+        && v.plateNumber is string && v.plateNumber.size() <= 20
+        && v.make is string && v.make.size() <= 50
+        && v.model is string && v.model.size() <= 50
+        && v.status in ['available', 'rented', 'maintenance', 'archived']
+        && (!v.keys().hasAny(['dailyRate']) || (v.dailyRate is number && v.dailyRate >= 0))
+        && (!v.keys().hasAny(['images']) || (v.images is list && v.images.size() <= 20))
+        && (!v.keys().hasAny(['fuelLevel']) || (v.fuelLevel is number && v.fuelLevel >= 0 && v.fuelLevel <= 100))
+        && (!v.keys().hasAny(['location']) || v.location is map);
+    }
+
+    function isValidCustomer(c) {
+      return c.keys().hasAll(['firstName', 'lastName', 'email'])
+        && c.firstName is string && c.firstName.size() <= 50
+        && c.lastName is string && c.lastName.size() <= 50
+        && c.email is string && c.email.size() <= 100
+        && (!c.keys().hasAny(['phone']) || (c.phone is string && c.phone.size() <= 20))
+        && (!c.keys().hasAny(['address']) || c.address is map)
+        && (!c.keys().hasAny(['tags']) || (c.tags is list && c.tags.size() <= 10));
+    }
+
+    function isValidReservation(r) {
+      return r.keys().hasAll(['customerId', 'vehicleId', 'startDate', 'endDate', 'status'])
+        && (r.customerId == request.auth.uid || isAdmin())
+        && r.vehicleId is string
+        && r.status in ['quote', 'confirmed', 'active', 'completed', 'cancelled']
+        && r.startDate is timestamp
+        && r.endDate is timestamp
+        && r.startDate <= r.endDate;
+    }
+
+    function isValidIncident(i) {
+      return i.keys().hasAll(['reservationId', 'type', 'amount'])
+        && i.reservationId is string
+        && i.type is string && i.type.size() <= 100
+        && i.amount is number && i.amount >= 0;
+    }
+
+    function isValidNotification(n) {
+      return n.keys().hasAll(['title', 'message', 'type', 'timestamp', 'read'])
+        && n.title is string && n.title.size() <= 200
+        && n.message is string && n.message.size() <= 1000
+        && n.type in ['info', 'warning', 'critical', 'success']
+        && n.timestamp is timestamp
+        && n.read is bool;
+    }
+
+    function isValidMaintenanceLog(m) {
+      return m.keys().hasAll(['vehicleId', 'serviceType', 'cost', 'scheduledDate', 'status', 'createdAt'])
+        && m.vehicleId is string
+        && m.serviceType is string && m.serviceType.size() <= 100
+        && m.cost is number && m.cost >= 0
+        && m.scheduledDate is string && m.scheduledDate.size() <= 50
+        && m.status in ['pending', 'in_progress', 'completed']
+        && m.createdAt is string && m.createdAt.size() <= 60
+        && (!m.keys().hasAny(['completedDate']) || m.completedDate is string)
+        && (!m.keys().hasAny(['details']) || m.details is string);
+    }
+
+    // --- Collections ---
+
+    match /maintenance_logs/{logId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isAdmin() && isValidMaintenanceLog(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /finances/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /transactions/{txId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /notifications/{notifId} {
+      allow get, list: if isSignedIn(); 
+      allow create: if isSignedIn() && isValidNotification(request.resource.data);
+      allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAdmin();
+    }
+
+    match /fcmTokens/{token} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /vehicles/{vehicleId} {
+      allow get: if true; // Publicly viewable for catalog
+      allow list: if true; 
+
+      allow create: if isAdmin() && isValidVehicle(request.resource.data) && isValidId(vehicleId);
+      
+      allow update: if (isAdmin() || (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'location', 'fuelLevel'])))
+        && isValidVehicle(request.resource.data);
+
+      allow delete: if isAdmin();
+    }
+
+    match /customers/{userId} {
+      // PII Isolation: Only owner or admin can read/write
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin(); 
+
+      allow create: if (isOwner(userId) || isAdmin()) && isValidCustomer(request.resource.data)
+        && (isAdmin() || !request.resource.data.keys().hasAny(['tags'])); // Forbid self-assigning tags unless admin
+      
+      allow update: if (isOwner(userId) || isAdmin())
+        && isValidCustomer(request.resource.data)
+        // Ensure tags can only be changed by admin
+        && (isAdmin() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firstName', 'lastName', 'email', 'phone', 'address', 'birthday', 'driverLicense']));
+
+      allow delete: if isAdmin();
+    }
+
+    match /reservations/{resId} {
+      allow get: if isSignedIn() && (resource.data.customerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.customerId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidReservation(request.resource.data)
+        && exists(/databases/$(database)/documents/vehicles/$(request.resource.data.vehicleId));
+        
+      allow update: if isSignedIn() 
+        && (resource.data.customerId == request.auth.uid || isAdmin())
+        && isValidReservation(request.resource.data)
+        // Prevent update if completed/cancelled unless admin
+        && (isAdmin() || (resource.data.status != 'completed' && resource.data.status != 'cancelled'))
+        && (isAdmin() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'endDate']));
+
+      allow delete: if isAdmin();
+    }
+
+    match /incidents/{incId} {
+      allow get: if isSignedIn() && (get(/databases/$(database)/documents/reservations/$(resource.data.reservationId)).data.customerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.reservationId != null && get(/databases/$(database)/documents/reservations/$(resource.data.reservationId)).data.customerId == request.auth.uid || isAdmin());
+
+      allow create: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/reservations/$(request.resource.data.reservationId)).data.customerId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Auth metadata
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      // Allow creation of bootstrap records if the bootstrap_check does not exist
+      allow create: if isSignedIn() && (
+        adminId == 'bootstrap_check' || 
+        !exists(/databases/$(database)/documents/admins/bootstrap_check)
+      );
+      allow update, delete: if isAdmin() && adminId != 'bootstrap_check';
+    }
+  }
+}
