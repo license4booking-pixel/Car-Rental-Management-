@@ -47,6 +47,8 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
   
   // Add Asset state
   const [isAddingAsset, setIsAddingAsset] = React.useState(false);
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = React.useState(false);
   const [formMake, setFormMake] = React.useState('');
   const [formModel, setFormModel] = React.useState('');
   const [formYear, setFormYear] = React.useState(new Date().getFullYear());
@@ -54,6 +56,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
   const [formVin, setFormVin] = React.useState('');
   const [formMileage, setFormMileage] = React.useState(0);
   const [formDailyRate, setFormDailyRate] = React.useState(99);
+  const [formHourlyRate, setFormHourlyRate] = React.useState(15);
   const [formFuel, setFormFuel] = React.useState(100);
   const [formStatus, setFormStatus] = React.useState<VehicleStatus>(VehicleStatus.AVAILABLE);
 
@@ -66,6 +69,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
   const [editVin, setEditVin] = React.useState('');
   const [editMileage, setEditMileage] = React.useState(0);
   const [editDailyRate, setEditDailyRate] = React.useState(99);
+  const [editHourlyRate, setEditHourlyRate] = React.useState(15);
   const [editFuel, setEditFuel] = React.useState(100);
   const [editStatus, setEditStatus] = React.useState<VehicleStatus>(VehicleStatus.AVAILABLE);
 
@@ -115,18 +119,23 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
     if (!db) return;
     let importedCount = 0;
     for (const row of data) {
-      if (row.make && row.model && row.plateNumber) {
+      const make = row.make || row.Make || row.brand || row.Brand || 'Unknown Make';
+      const model = row.model || row.Model || row.vehicle || row.Vehicle || 'Unknown Model';
+      const plateNumber = String(row.plateNumber || row['Plate Number'] || row.Plate || row.plate || row['License Plate'] || row.licensePlate || row['License'] || row.license || `UNK-${Math.floor(Math.random() * 9999)}`);
+      
+      if (Object.keys(row).length > 0) {
         try {
           await addDoc(collection(db, 'vehicles'), {
-            make: row.make,
-            model: row.model,
-            plateNumber: row.plateNumber.toUpperCase(),
-            vin: row.vin || '',
-            year: parseInt(row.year) || new Date().getFullYear(),
-            status: row.status || VehicleStatus.AVAILABLE,
-            mileage: parseInt(row.mileage) || 0,
-            dailyRate: parseFloat(row.dailyRate) || 0,
-            fuelLevel: parseInt(row.fuelLevel) || 100,
+            make: make,
+            model: model,
+            plateNumber: plateNumber.toUpperCase(),
+            vin: row.vin || row.VIN || '',
+            year: parseInt(row.year || row.Year) || new Date().getFullYear(),
+            status: row.status || row.Status || VehicleStatus.AVAILABLE,
+            mileage: parseInt(row.mileage || row.Mileage) || 0,
+            dailyRate: parseFloat(row.dailyRate || row['Daily Rate']) || 0,
+            hourlyRate: parseFloat(row.hourlyRate || row['Hourly Rate']) || 15,
+            fuelLevel: parseInt(row.fuelLevel || row['Fuel Level']) || 100,
             createdAt: new Date().toISOString()
           });
           importedCount++;
@@ -154,6 +163,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
         vin: formVin,
         mileage: formMileage,
         dailyRate: formDailyRate,
+        hourlyRate: formHourlyRate,
         fuelLevel: formFuel,
         status: formStatus,
         createdAt: new Date().toISOString()
@@ -182,6 +192,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
     setEditVin(v.vin || '');
     setEditMileage(v.mileage || 0);
     setEditDailyRate(v.dailyRate || 99);
+    setEditHourlyRate(v.hourlyRate || 15);
     setEditFuel(v.fuelLevel ?? 100);
     setEditStatus(v.status || VehicleStatus.AVAILABLE);
     setIsEditingAsset(true);
@@ -200,6 +211,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
         vin: editVin,
         mileage: editMileage,
         dailyRate: editDailyRate,
+        hourlyRate: editHourlyRate,
         fuelLevel: editFuel,
         status: editStatus
       });
@@ -212,6 +224,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
         vin: editVin,
         mileage: editMileage,
         dailyRate: editDailyRate,
+        hourlyRate: editHourlyRate,
         fuelLevel: editFuel,
         status: editStatus
       });
@@ -222,14 +235,21 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
     }
   };
 
+  const [confirmSingleDelete, setConfirmSingleDelete] = React.useState(false);
+
   const handleDeleteAsset = async (vehicleId: string) => {
-    if (!confirm("Are you sure you want to permanently delete this asset from the fleet database? This action is irreversible.")) return;
+    if (!confirmSingleDelete) {
+      setConfirmSingleDelete(true);
+      setTimeout(() => setConfirmSingleDelete(false), 3000);
+      return;
+    }
 
     try {
       await deleteDoc(doc(db, 'vehicles', vehicleId));
       setSelectedVehicle(null);
       setMaintenanceMode(false);
       setIsEditingAsset(false);
+      setConfirmSingleDelete(false);
     } catch (e) {
       console.error("Failed to delete asset:", e);
       alert("Error deleting vehicle asset");
@@ -248,9 +268,49 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Active Fleet</h1>
-          <p className="text-zinc-500 text-sm mt-1">Real-time status and telemetry of all physical assets.</p>
+          <p className="text-zinc-500 text-sm mt-1">Real-time status and telemetry of all vehicles.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3 items-center">
+          {selectedIds.size > 0 && (
+            <button 
+              onClick={async () => {
+                if (!confirmBulkDelete) {
+                  setConfirmBulkDelete(true);
+                  setTimeout(() => setConfirmBulkDelete(false), 3000);
+                  return;
+                }
+                
+                try {
+                  const promises = Array.from(selectedIds).map(async (id) => {
+                    return deleteDoc(doc(db, 'vehicles', id));
+                  });
+                  await Promise.all(promises);
+                  setSelectedIds(new Set());
+                  setConfirmBulkDelete(false);
+                } catch (e) {
+                  console.error("Failed to bulk delete", e);
+                  alert("Error bulk deleting vehicles");
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-2 bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors mr-2 whitespace-nowrap"
+            >
+              <Trash2 size={14} /> {confirmBulkDelete ? 'Click to Confirm' : `Delete (${selectedIds.size})`}
+            </button>
+          )}
+
+          <button 
+            onClick={() => {
+              if (selectedIds.size === filteredVehicles.length && filteredVehicles.length > 0) {
+                setSelectedIds(new Set());
+              } else {
+                setSelectedIds(new Set(filteredVehicles.map(v => v.id)));
+              }
+            }}
+            className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-[#27272a] text-white rounded-lg text-xs font-bold hover:bg-zinc-800 transition-colors"
+          >
+            {selectedIds.size === filteredVehicles.length && filteredVehicles.length > 0 ? 'Deselect All' : 'Select All'}
+          </button>
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
             <input 
@@ -285,29 +345,75 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
             onClick={() => setIsAddingAsset(true)}
             className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-500 transition-colors shadow-[0_0_15px_rgba(37,99,235,0.3)]"
           >
-            <Plus size={14} /> Add Asset
+            <Plus size={14} /> Add Vehicle
           </button>
-          <CSVImporter onImport={handleImport} label="Import" />
+          <CSVImporter 
+            onImport={handleImport} 
+            label="Import" 
+            instructions={
+              <div className="space-y-2">
+                <p>Upload a CSV or Excel file to bulk import vehicles.</p>
+                <p>The system requires your file to match these exact column headers:</p>
+                <ul className="list-disc pl-4 space-y-1 text-xs text-zinc-400 font-mono">
+                  <li><strong>make</strong> or <strong>Brand</strong></li>
+                  <li><strong>model</strong> or <strong>Vehicle</strong></li>
+                  <li><strong>plateNumber</strong> or <strong>License Plate</strong></li>
+                  <li><strong>vin</strong></li>
+                  <li><strong>year</strong></li>
+                  <li><strong>status</strong> (e.g. available, rented)</li>
+                  <li><strong>mileage</strong></li>
+                  <li><strong>dailyRate</strong></li>
+                  <li><strong>hourlyRate</strong></li>
+                  <li><strong>fuelLevel</strong> (0-100)</li>
+                </ul>
+                <p className="text-xs text-blue-400 mt-2">Any missing data will be filled with unknown or default values.</p>
+              </div>
+            }
+          />
         </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <div className="p-4 bg-[#111113] rounded-xl border border-[#27272a] flex flex-col">
+        <button 
+          onClick={() => setFilterStatus(filterStatus === VehicleStatus.AVAILABLE ? 'all' : VehicleStatus.AVAILABLE)}
+          className={cn(
+            "p-4 bg-[#111113] rounded-xl border flex flex-col text-left transition-colors cursor-pointer",
+            filterStatus === VehicleStatus.AVAILABLE ? "border-emerald-500/50 bg-emerald-500/5" : "border-[#27272a] hover:border-zinc-700"
+          )}
+        >
           <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-widest">Available</span>
           <span className="text-2xl font-black text-white">{counts.available}</span>
-        </div>
-        <div className="p-4 bg-[#111113] rounded-xl border border-[#27272a] flex flex-col">
+        </button>
+        <button 
+          onClick={() => setFilterStatus(filterStatus === VehicleStatus.RENTED ? 'all' : VehicleStatus.RENTED)}
+          className={cn(
+            "p-4 bg-[#111113] rounded-xl border flex flex-col text-left transition-colors cursor-pointer",
+            filterStatus === VehicleStatus.RENTED ? "border-amber-500/50 bg-amber-500/5" : "border-[#27272a] hover:border-zinc-700"
+          )}
+        >
           <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-widest">Rented</span>
           <span className="text-2xl font-black text-white">{counts.rented}</span>
-        </div>
-        <div className="p-4 bg-[#111113] rounded-xl border border-[#27272a] flex flex-col">
+        </button>
+        <button 
+          onClick={() => setFilterStatus(filterStatus === VehicleStatus.MAINTENANCE ? 'all' : VehicleStatus.MAINTENANCE)}
+          className={cn(
+            "p-4 bg-[#111113] rounded-xl border flex flex-col text-left transition-colors cursor-pointer",
+            filterStatus === VehicleStatus.MAINTENANCE ? "border-rose-500/50 bg-rose-500/5" : "border-[#27272a] hover:border-zinc-700"
+          )}
+        >
           <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-widest">Maintenance</span>
           <span className="text-2xl font-black text-white">{counts.maintenance}</span>
-        </div>
-        <div className="p-4 bg-[#111113] rounded-xl border border-[#27272a] flex flex-col">
+        </button>
+        <button 
+          onClick={() => setFilterStatus(filterStatus === VehicleStatus.ARCHIVED ? 'all' : VehicleStatus.ARCHIVED)}
+          className={cn(
+            "p-4 bg-[#111113] rounded-xl border flex flex-col text-left transition-colors cursor-pointer",
+            filterStatus === VehicleStatus.ARCHIVED ? "border-zinc-500/50 bg-zinc-500/5" : "border-[#27272a] hover:border-zinc-700"
+          )}
+        >
           <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-widest">Archived</span>
           <span className="text-2xl font-black text-white">{counts.archived}</span>
-        </div>
+        </button>
       </div>
 
       {loading ? (
@@ -324,9 +430,33 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
               initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
               whileHover={{ y: -4 }}
-              onClick={() => setSelectedVehicle(v)}
-              className="group bg-[#09090b] border border-[#27272a] rounded-xl overflow-hidden hover:border-zinc-700 transition-all cursor-pointer"
+              onClick={(e: any) => {
+                // If user clicked the checkbox, don't open the modal
+                if (e.target.type === 'checkbox') return;
+                setSelectedVehicle(v);
+              }}
+              className={cn(
+                "group border rounded-xl overflow-hidden transition-all cursor-pointer relative",
+                selectedIds.has(v.id) ? "border-blue-500 bg-[#11111a]" : "bg-[#09090b] border-[#27272a] hover:border-zinc-700"
+              )}
             >
+              <div className="absolute top-4 right-4 z-20">
+                <input 
+                  type="checkbox" 
+                  className="w-5 h-5 accent-blue-500 cursor-pointer"
+                  checked={selectedIds.has(v.id)}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    const newSet = new Set(selectedIds);
+                    if (newSet.has(v.id)) {
+                      newSet.delete(v.id);
+                    } else {
+                      newSet.add(v.id);
+                    }
+                    setSelectedIds(newSet);
+                  }}
+                />
+              </div>
               <div className="aspect-[16/10] bg-zinc-900 relative overflow-hidden flex items-center justify-center p-8">
                 <div className="absolute top-4 left-4 z-10 flex gap-2">
                   <span className={cn(
@@ -394,7 +524,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
                     <MapIcon size={12} /> Locate
                   </button>
                   <button className="flex-[1.5] py-2.5 bg-white text-black rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-zinc-200 transition-all shadow-xl">
-                    Manage Asset
+                    Manage Vehicle
                   </button>
                 </div>
               </div>
@@ -417,7 +547,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
             </button>
 
             <h3 className="text-lg font-bold text-white uppercase italic tracking-tight mb-4">
-              Onboard Fleet Asset
+              Add Vehicle
             </h3>
 
             <form onSubmit={handleAddAssetSubmit} className="space-y-4">
@@ -480,7 +610,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block">Asset Status</label>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block">Vehicle Status</label>
                   <select 
                     value={formStatus}
                     onChange={e => setFormStatus(e.target.value as any)}
@@ -494,7 +624,17 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block">Hourly ($)</label>
+                  <input 
+                    type="number"
+                    value={formHourlyRate}
+                    onChange={e => setFormHourlyRate(parseFloat(e.target.value) || 0)}
+                    className="w-full bg-[#18181b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white focus:border-blue-500/50 outline-none"
+                    required
+                  />
+                </div>
                 <div className="space-y-1">
                   <label className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block">Daily ($)</label>
                   <input 
@@ -539,7 +679,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
                   type="submit"
                   className="px-4 py-2 bg-white text-black rounded-lg text-xs font-bold hover:bg-zinc-200 transition-colors uppercase tracking-wider"
                 >
-                  Onboard Asset
+                  Add Vehicle
                 </button>
               </div>
             </form>
@@ -554,7 +694,7 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
             
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-white tracking-tight">
-                {isEditingAsset ? "Edit Fleet Asset details" : `${selectedVehicle.make} ${selectedVehicle.model}`}
+                {isEditingAsset ? "Edit Vehicle Details" : `${selectedVehicle.make} ${selectedVehicle.model}`}
               </h2>
               <button 
                 onClick={() => { 
@@ -642,7 +782,17 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block">Hourly Rate ($)</label>
+                    <input 
+                      type="number"
+                      className="w-full bg-[#18181b] border border-[#27272a] rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500"
+                      value={editHourlyRate}
+                      onChange={e => setEditHourlyRate(parseFloat(e.target.value) || 0)}
+                      required
+                    />
+                  </div>
                   <div className="space-y-1">
                     <label className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block">Daily Rate ($)</label>
                     <input 
@@ -771,6 +921,10 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
                     <span className="text-sm font-mono text-white">{selectedVehicle.vin || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between py-3 border-b border-[#27272a]">
+                    <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Hourly Rate</span>
+                    <span className="text-sm font-mono text-white font-black">${selectedVehicle.hourlyRate || 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between py-3 border-b border-[#27272a]">
                     <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Daily Rate</span>
                     <span className="text-sm font-mono text-white font-black">${selectedVehicle.dailyRate || 'N/A'}</span>
                   </div>
@@ -819,13 +973,13 @@ export default function FleetInventory({ setView }: { setView?: (view: string) =
                     onClick={() => handleOpenEdit(selectedVehicle)}
                     className="py-3 bg-zinc-900 border border-[#27272a] text-blue-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-zinc-800 hover:text-blue-300 transition-all flex items-center justify-center gap-1.5"
                   >
-                    <Edit2 size={13} /> Edit Asset Details
+                    <Edit2 size={13} /> Edit Vehicle Details
                   </button>
                   <button 
                     onClick={() => handleDeleteAsset(selectedVehicle.id)}
                     className="py-3 bg-zinc-900 border border-rose-950 text-rose-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-rose-950/20 hover:text-rose-300 transition-all flex items-center justify-center gap-1.5"
                   >
-                    <Trash2 size={13} /> Decommission Asset
+                    <Trash2 size={13} /> {confirmSingleDelete ? 'Click to Confirm' : 'Delete Vehicle'}
                   </button>
                 </div>
 

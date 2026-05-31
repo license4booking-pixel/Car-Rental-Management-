@@ -44,7 +44,7 @@ export default function QRScanner({ onScan, onClose }: { onScan: (text: string) 
           <Camera size={24} />
         </div>
         <h2 className="text-sm font-black text-white tracking-widest uppercase mb-1 text-center">Scan Fleet QR</h2>
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest text-center mb-6">Point camera at vehicle asset tag</p>
+        <p className="text-[10px] text-zinc-500 uppercase tracking-widest text-center mb-6">Point camera at vehicle QR code</p>
         
         {error ? (
           <div className="p-4 bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-bold uppercase text-center rounded-lg">

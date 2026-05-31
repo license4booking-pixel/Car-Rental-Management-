@@ -80,9 +80,15 @@ export default function FleetMaintenance() {
       setVehicles(snap.docs.map(d => ({ id: d.id, ...d.data() } as Vehicle)));
     });
 
+    const handleOpenNew = (e: any) => {
+      if (e.detail === 'maintenance') setIsAdding(true);
+    };
+    window.addEventListener('open-new-record', handleOpenNew);
+
     return () => {
       unsubLogs();
       unsubVehicles();
+      window.removeEventListener('open-new-record', handleOpenNew);
     };
   }, []);
 
@@ -90,7 +96,7 @@ export default function FleetMaintenance() {
     e.preventDefault();
     if (!db) return;
     if (!formVehicle) {
-      alert("Please select a target fleet asset!");
+      alert("Please select a target vehicle!");
       return;
     }
 
@@ -110,6 +116,12 @@ export default function FleetMaintenance() {
       }
 
       await addDoc(collection(db, 'maintenance_logs'), data);
+
+      if (formStatus === 'completed') {
+         await updateDoc(doc(db, 'vehicles', formVehicle), { last_maintenance_date: data.completedDate });
+      } else {
+         await updateDoc(doc(db, 'vehicles', formVehicle), { next_maintenance_due: data.scheduledDate });
+      }
 
       // Reset form
       setIsAdding(false);
@@ -150,9 +162,11 @@ export default function FleetMaintenance() {
 
       if (editStatus === 'completed') {
         updateData.completedDate = editCompletedDate || new Date().toISOString().split('T')[0];
+        await updateDoc(doc(db, 'vehicles', editingLog.vehicleId), { last_maintenance_date: updateData.completedDate });
       } else {
         // If status shifted back, remove completed date
         updateData.completedDate = '';
+        await updateDoc(doc(db, 'vehicles', editingLog.vehicleId), { next_maintenance_due: editScheduledDate });
       }
 
       await updateDoc(doc(db, 'maintenance_logs', editingLog.id), updateData);
@@ -186,8 +200,12 @@ export default function FleetMaintenance() {
       };
       if (newStatus === 'completed') {
         updateData.completedDate = new Date().toISOString().split('T')[0];
+        await updateDoc(doc(db, 'vehicles', log.vehicleId), { last_maintenance_date: updateData.completedDate });
       } else {
         updateData.completedDate = '';
+        if (newStatus === 'pending') {
+           await updateDoc(doc(db, 'vehicles', log.vehicleId), { next_maintenance_due: log.scheduledDate });
+        }
       }
       await updateDoc(doc(db, 'maintenance_logs', log.id), updateData);
     } catch (err) {
@@ -198,7 +216,7 @@ export default function FleetMaintenance() {
   // Helper matching vehicle details
   const getVehicleString = (id: string) => {
     const v = vehicles.find(item => item.id === id);
-    if (!v) return "Unknown Fleet Asset";
+    if (!v) return "Unknown Vehicle";
     return `${v.year} ${v.make} ${v.model} (${v.plateNumber})`;
   };
 
@@ -355,7 +373,7 @@ export default function FleetMaintenance() {
 
               <form onSubmit={handleCreate} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">Target Fleet Asset</label>
+                  <label className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">Target Vehicle</label>
                   <select 
                     value={formVehicle} 
                     onChange={e => setFormVehicle(e.target.value)} 
@@ -478,7 +496,7 @@ export default function FleetMaintenance() {
 
               <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
                 <div className="space-y-1 text-xs">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">Fleet Asset</span>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">Vehicle</span>
                   <div className="bg-[#18181b] border border-[#27272a] px-3 py-2 rounded-lg text-zinc-400 font-medium">
                     {getVehicleString(editingLog.vehicleId)}
                   </div>

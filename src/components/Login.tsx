@@ -3,12 +3,10 @@ import { Lock, Mail, Car, ArrowRight, Database, Chrome } from 'lucide-react';
 import { motion } from 'motion/react';
 import { auth } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { seedData } from '../seed';
 import { cn } from '../lib/utils';
 
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const [loading, setLoading] = React.useState(false);
-  const [seeding, setSeeding] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -53,19 +51,6 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSeed = async () => {
-    setSeeding(true);
-    try {
-      await seedData();
-      alert("Database seeded with sample vehicles!");
-    } catch (err: any) {
-      console.error("Seeding failed:", err);
-      alert("Failed to seed database. Ensure you are authorized.");
-    } finally {
-      setSeeding(false);
     }
   };
 
@@ -199,17 +184,6 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
             Standard operator privileges required.<br />
             Personnel with active credentials may proceed.
           </p>
-
-          <div className="pt-6 border-t border-[#27272a]">
-            <button 
-              onClick={handleSeed}
-              disabled={seeding}
-              className="w-full flex items-center justify-center gap-2 text-[9px] font-black text-zinc-600 uppercase tracking-[0.2em] hover:text-white transition-colors group"
-            >
-              <Database size={12} className={cn("group-hover:text-blue-500 transition-colors", seeding ? "animate-spin text-blue-500" : "")} />
-              {seeding ? "Injecting Data..." : "Provision Core Data"}
-            </button>
-          </div>
         </div>
 
         <div className="text-center mt-10">

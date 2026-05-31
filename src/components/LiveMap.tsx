@@ -40,21 +40,13 @@ interface VehicleLocation {
   vin: string;
 }
 
-const INITIAL_VEHICLES: VehicleLocation[] = [
-  { id: '1', lat: 39.9546, lng: -75.1672, plate: 'BCD 4567', model: 'Tesla Model 3', status: VehicleStatus.RENTED, speed: 78, fuel: 45, vin: '1FA6P8CF8...' },
-  { id: '2', lat: 39.9626, lng: -75.1552, plate: 'EFG 8901', model: 'Rivian R1S', status: VehicleStatus.AVAILABLE, speed: 0, fuel: 92, vin: '1HGCP22...' },
-  { id: '3', lat: 39.9426, lng: -75.1752, plate: 'XYZ 1234', model: 'Porsche Taycan', status: VehicleStatus.AVAILABLE, speed: 0, fuel: 88, vin: 'WP0AA2Y...' },
-  { id: '4', lat: 39.9726, lng: -75.1852, plate: 'LMN 5678', model: 'Lucid Air', status: VehicleStatus.RENTED, speed: 105, fuel: 62, vin: '1L3AD4...' },
-];
-
 export default function LiveMap() {
   const mapContainer = React.useRef<HTMLDivElement>(null);
   const map = React.useRef<maplibregl.Map | null>(null);
   const markersRef = React.useRef<{ [key: string]: { marker: maplibregl.Marker, root: Root } }>({});
   const [selectedVehicle, setSelectedVehicle] = React.useState<VehicleLocation | null>(null);
   
-  // Initial mock data
-  const [vehicles, setVehicles] = React.useState<VehicleLocation[]>(INITIAL_VEHICLES);
+  const [vehicles, setVehicles] = React.useState<VehicleLocation[]>([]);
 
   React.useEffect(() => {
     if (!mapContainer.current) return;
@@ -155,50 +147,44 @@ export default function LiveMap() {
   }, [vehicles, selectedVehicle]);
 
 
-  // Update markers and sync with API
+  // Update markers and sync with Real Firebase Fleet
   React.useEffect(() => {
-    const fetchLocations = async () => {
-      try {
-        const response = await fetch('/api/fleet-locations');
-        const data = await response.json();
+    if (!db) return;
+    
+    // Subscribe to Firestore vehicles
+    const q = query(collection(db, 'vehicles'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const apiVehicles: VehicleLocation[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
         
-        if (data && data.length > 0) {
-          const apiVehicles: VehicleLocation[] = data.map((v: any) => ({
-            id: v.vehicleId,
-            lat: v.lat,
-            lng: v.lng,
-            plate: v.vehicleId === 'TX-9011' ? 'TX-9011 (LIVE)' : v.vehicleId,
-            model: v.vehicleId === 'TX-9011' ? 'Live Track Asset' : 'Managed Fleet',
-            status: v.status === 'active' ? VehicleStatus.RENTED : VehicleStatus.AVAILABLE,
-            speed: parseFloat(v.speed) || 0,
-            fuel: 85, // Mock fuel for now
-            vin: `VIN-${v.vehicleId}`
-          }));
+        // Provide mock coordinates centered around philly if not available
+        const lat = data.location?.lat || (39.9526 + (Math.random() - 0.5) * 0.1);
+        const lng = data.location?.lng || (-75.1652 + (Math.random() - 0.5) * 0.1);
+        
+        apiVehicles.push({
+          id: doc.id,
+          lat,
+          lng,
+          plate: data.plateNumber || 'UNKNOWN',
+          model: data.make ? `${data.make} ${data.model}` : 'Unknown Vehicle',
+          status: data.status as VehicleStatus || VehicleStatus.AVAILABLE,
+          speed: data.location?.speed || 0,
+          fuel: data.fuelLevel || data.batteryLevel || 100,
+          vin: data.vin || `VIN-${doc.id.slice(0, 8)}`
+        });
+      });
+      setVehicles(apiVehicles);
+    });
 
-          // Merge with initial mock data
-          setVehicles(prev => {
-            const vehicleMap = new Map(INITIAL_VEHICLES.map(v => [v.id, v]));
-            apiVehicles.forEach(apiV => {
-              vehicleMap.set(apiV.id, apiV);
-            });
-            return Array.from(vehicleMap.values());
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch fleet locations:", error);
-      }
-    };
-
-    fetchLocations();
-    const interval = setInterval(fetchLocations, 5000);
-    return () => clearInterval(interval);
+    return () => unsubscribe();
   }, []);
-
-  // Removed simulation logic and Firestore fallback
 
   const zoomIn = () => map.current?.zoomIn();
   const zoomOut = () => map.current?.zoomOut();
   const resetView = () => map.current?.flyTo({ center: [-75.1652, 39.9526], zoom: 12 });
+
+
 
   return (
     <div className="h-[calc(100vh-12rem)] w-full rounded-3xl overflow-hidden border border-white/5 relative group">
@@ -217,7 +203,7 @@ export default function LiveMap() {
           <div className="space-y-4">
             <div className="flex justify-between items-end">
               <span className="text-[10px] text-zinc-600 font-bold uppercase tracking-widest">Total Fleet</span>
-              <span className="text-lg font-mono text-white leading-none">142 assets</span>
+              <span className="text-lg font-mono text-white leading-none">142 vehicles</span>
             </div>
             
             <div className="flex gap-1 h-1 w-full bg-zinc-800 rounded-full overflow-hidden">

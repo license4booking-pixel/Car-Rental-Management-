@@ -17,6 +17,7 @@ export interface Vehicle {
   vin: string;
   mileage: number;
   dailyRate: number;
+  hourlyRate?: number;
   images: string[];
   location?: {
     lat: number;
@@ -51,6 +52,17 @@ export interface Customer {
   birthday: Timestamp | string;
   driverLicense: DriverLicense;
   tags: string[];
+  status?: string;
+  createdAt?: string | Timestamp;
+  updatedAt?: string | Timestamp;
+  pickupDate?: string;
+  pickupTime?: string;
+  dropoffDate?: string;
+  dropoffTime?: string;
+  amountPaid?: number;
+  amountDue?: number;
+  assignedVehicle?: string;
+  paymentStatus?: 'Paid' | 'Unpaid';
 }
 
 export enum ReservationStatus {

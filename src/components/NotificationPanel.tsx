@@ -18,9 +18,10 @@ import { formatDistanceToNow } from 'date-fns';
 interface NotificationPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  onNavigate?: (view: string) => void;
 }
 
-export default function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
+export default function NotificationPanel({ isOpen, onClose, onNavigate }: NotificationPanelProps) {
   const { notifications, markAsRead, deleteNotification, clearAllNotifications, unreadCount } = useNotifications();
 
   const getIcon = (type: NotificationType) => {
@@ -78,8 +79,16 @@ export default function NotificationPanel({ isOpen, onClose }: NotificationPanel
                 notifications.map((n) => (
                   <div 
                     key={n.id}
+                    onClick={() => {
+                      if (n.link && onNavigate) {
+                        onNavigate(n.link);
+                        markAsRead(n.id!);
+                        onClose();
+                      }
+                    }}
                     className={cn(
                       "p-4 rounded-xl border transition-all relative group",
+                      n.link ? "cursor-pointer" : "",
                       n.read 
                         ? "bg-[#09090b] border-[#27272a] opacity-60" 
                         : "bg-[#111113] border-[#27272a] hover:border-zinc-700"

@@ -9,7 +9,7 @@ interface NotificationContextType {
   markAsRead: (id: string) => Promise<void>;
   deleteNotification: (id: string) => Promise<void>;
   clearAllNotifications: () => Promise<void>;
-  simulateNotification: (title: string, message: string, type: NotificationType) => Promise<void>;
+  simulateNotification: (title: string, message: string, type: NotificationType, link?: string) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -17,11 +17,14 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   
+  const prevNotificationsRef = React.useRef<AppNotification[]>([]);
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         // Subscribe to real-time notification updates
         const unsubNotifications = notificationService.subscribe((newNotifications) => {
+          // Play sound disabled
+          prevNotificationsRef.current = newNotifications;
           setNotifications(newNotifications);
         });
         
@@ -69,11 +72,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const simulateNotification = async (title: string, message: string, type: NotificationType) => {
+  const simulateNotification = async (title: string, message: string, type: NotificationType, link?: string) => {
     await notificationService.send({
       title,
       message,
       type,
+      link,
       priority: 'medium' as any
     });
   };

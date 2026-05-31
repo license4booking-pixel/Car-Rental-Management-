@@ -1,25 +1,186 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
+:root {
+  --surface-bg: #111113;
+  --back-bg: #09090b;
+  --border-col: #27272a;
+  --hover-col: #18181b;
+  --text-main: #fafafa;
+}
+
+:root.light {
+  --surface-bg: #ffffff;
+  --back-bg: #f4f4f5;
+  --border-col: #e4e4e7;
+  --hover-col: #f4f4f5;
+  --text-main: #181c24;
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
   --color-brand: #2563eb; /* Blue-600 */
-  --color-surface: #111113;
-  --color-background: #09090b;
-  --color-zinc-border: #27272a;
-  --color-zinc-hover: #18181b;
+  --color-surface: var(--surface-bg);
+  --color-background: var(--back-bg);
+  --color-[#111113]: var(--surface-bg);
+  --color-zinc-border: var(--border-col);
+  --color-zinc-hover: var(--hover-col);
 }
 
 @layer base {
   body {
-    @apply bg-background text-[#fafafa] font-sans overflow-hidden;
+    background-color: var(--back-bg);
+    color: var(--text-main);
+    @apply font-sans overflow-hidden;
   }
 
   input, select, textarea {
-    @apply bg-[#18181b] border border-[#27272a] rounded-lg focus:border-blue-500/50 outline-none transition-all;
+    background-color: var(--hover-col);
+    border-color: var(--border-col);
+    color: var(--text-main);
+    @apply rounded-lg focus:border-blue-500/50 outline-none transition-all;
   }
+}
+
+/* Global Light Mode Overrides for Hardcoded Dark Utilities */
+:root.light .bg-\[\#09090b\] {
+  background-color: #f4f4f5 !important;
+}
+:root.light .bg-\[\#09090b\]\/80 {
+  background-color: rgba(244, 244, 245, 0.8) !important;
+}
+:root.light .bg-\[\#09090b\]\/90 {
+  background-color: rgba(244, 244, 245, 0.9) !important;
+}
+:root.light .bg-\[\#09090b\]\/95 {
+  background-color: rgba(244, 244, 245, 0.95) !important;
+}
+:root.light .bg-\[\#18181b\] {
+  background-color: #ffffff !important;
+}
+:root.light .bg-\[\#18181b\]\/80 {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+}
+:root.light .bg-\[\#111113\] {
+  background-color: #f4f4f5 !important;
+}
+:root.light .bg-\[\#0d0d0f\] {
+  background-color: #e4e4e7 !important;
+}
+:root.light .bg-\[\#0c0d10\] {
+  background-color: #e4e4e7 !important;
+}
+:root.light .bg-zinc-900 {
+  background-color: #ffffff !important;
+}
+:root.light .bg-zinc-900\/40 {
+  background-color: rgba(244, 244, 245, 0.4) !important;
+}
+:root.light .bg-zinc-950 {
+  background-color: #e4e4e7 !important;
+}
+:root.light .bg-[#18181b] {
+  background-color: #ffffff !important;
+}
+:root.light .bg-black {
+  background-color: #ffffff !important;
+}
+:root.light .bg-black\/60 {
+  background-color: rgba(0, 0, 0, 0.4) !important;
+}
+:root.light .bg-white\/5 {
+  background-color: rgba(9, 9, 11, 0.05) !important;
+}
+:root.light .bg-white\/10 {
+  background-color: rgba(9, 9, 11, 0.08) !important;
+}
+:root.light .hover\:bg-white\/5:hover {
+  background-color: rgba(9, 9, 11, 0.04) !important;
+}
+:root.light .hover\:bg-zinc-800:hover {
+  background-color: #f4f4f5 !important;
+}
+:root.light .hover\:bg-zinc-900:hover {
+  background-color: #fafafa !important;
+}
+:root.light .bg-white.text-black {
+  background-color: #18181b !important;
+  color: #ffffff !important;
+}
+:root.light .bg-white.text-black:hover {
+  background-color: #27272a !important;
+}
+
+/* Border overrides */
+:root.light .border-\[\#27272a\] {
+  border-color: #e4e4e7 !important;
+}
+:root.light .border-\[\#27272a\]\/50 {
+  border-color: rgba(228, 228, 231, 0.5) !important;
+}
+:root.light .border-zinc-800 {
+  border-color: #e4e4e7 !important;
+}
+:root.light .divide-\[\#27272a\] > * + * {
+  border-color: #e4e4e7 !important;
+}
+:root.light .divide-zinc-800 > * + * {
+  border-color: #e4e4e7 !important;
+}
+
+/* Typography color overrides */
+:root.light .text-white {
+  color: #181c24 !important;
+}
+:root.light .text-\[\#fafafa\] {
+  color: #181c24 !important;
+}
+:root.light .text-zinc-100 {
+  color: #18181b !important;
+}
+:root.light .text-zinc-200 {
+  color: #27272a !important;
+}
+:root.light .text-zinc-300 {
+  color: #3f3f46 !important;
+}
+:root.light .text-zinc-400 {
+  color: #52525b !important;
+}
+:root.light .text-slate-400 {
+  color: #52525b !important;
+}
+:root.light .text-zinc-500 {
+  color: #71717a !important;
+}
+:root.light .text-slate-500 {
+  color: #71717a !important;
+}
+:root.light .text-zinc-600 {
+  color: #8e8e93 !important;
+}
+:root.light .text-zinc-700 {
+  color: #a1a1aa !important;
+}
+
+/* Map specific tweaks */
+:root.light .leaflet-popup-content-wrapper,
+:root.light .leaflet-popup-tip {
+  background: #ffffff !important;
+  color: #18181b !important;
+}
+
+/* Chart tweaks */
+:root.light .recharts-default-tooltip {
+  background-color: #ffffff !important;
+  border-color: #e4e4e7 !important;
+  color: #181c24 !important;
+}
+:root.light .recharts-cartesian-grid-horizontal line, 
+:root.light .recharts-cartesian-grid-vertical line {
+  stroke: #e4e4e7 !important;
 }
 
 .scrollbar-hide::-webkit-scrollbar {

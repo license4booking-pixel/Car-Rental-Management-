@@ -59,21 +59,32 @@ export default function UserManagement() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    const handleOpenNew = (e: any) => {
+      if (e.detail === 'user') {
+        handleOpenAdd();
+      }
+    };
+    window.addEventListener('open-new-record', handleOpenNew);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('open-new-record', handleOpenNew);
+    };
   }, []);
 
   const handleImport = async (data: any[]) => {
     if (!db) return;
     let importedCount = 0;
     for (const row of data) {
-      if (row.email) {
+      const emailValue = row.email || row.Email;
+      if (emailValue) {
         try {
-          const email = row.email.toLowerCase().trim();
+          const email = emailValue.toLowerCase().trim();
           await setDoc(doc(db, 'admins', email), {
-            name: row.name || email.split('@')[0],
+            name: row.name || row.Name || email.split('@')[0],
             email: email,
-            role: row.role || 'viewer',
-            status: row.status || 'invited',
+            role: row.role || row.Role || 'viewer',
+            status: row.status || row.Status || 'invited',
             createdAt: new Date().toISOString()
           });
           importedCount++;
@@ -103,10 +114,18 @@ export default function UserManagement() {
     setIsModalOpen(true);
   };
 
+  const [confirmSingleDelete, setConfirmSingleDelete] = React.useState<string | null>(null);
+
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm("Are you sure you want to revoke this operative's access clearance?")) return;
+    if (confirmSingleDelete !== userId) {
+      setConfirmSingleDelete(userId);
+      setTimeout(() => setConfirmSingleDelete(null), 3000);
+      return;
+    }
+    
     try {
       await deleteDoc(doc(db, 'admins', userId));
+      setConfirmSingleDelete(null);
     } catch (e) {
       console.error("Failed to delete operative:", e);
       alert("Error deleting user");
@@ -251,10 +270,10 @@ export default function UserManagement() {
                         </button>
                         <button 
                           onClick={() => handleDeleteUser(user.id)}
-                          className="p-1.5 text-zinc-500 hover:text-rose-500 hover:bg-rose-500/15 rounded transition-colors" 
+                          className={`p-1.5 rounded transition-colors ${confirmSingleDelete === user.id ? 'bg-rose-500/20 text-rose-500' : 'text-zinc-500 hover:text-rose-500 hover:bg-rose-500/15'}`} 
                           title="Revoke Access"
                         >
-                          <Trash2 size={13} />
+                          {confirmSingleDelete === user.id ? <span className="text-[10px] font-bold uppercase tracking-widest px-1">Confirm</span> : <Trash2 size={13} />}
                         </button>
                       </div>
                     </td>

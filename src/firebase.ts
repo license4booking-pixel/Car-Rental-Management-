@@ -1,14 +1,36 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer, initializeFirestore } from 'firebase/firestore';
+import { getFirestore, doc, getDocFromServer, initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 import { getMessaging } from 'firebase/messaging';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
+
+// Clean up stale internal Firestore tab sync keys to free up localStorage constraints
+try {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    for (let i = window.localStorage.length - 1; i >= 0; i--) {
+      const key = window.localStorage.key(i);
+      if (key && (
+        key.startsWith('firestore_mutations_') || 
+        key.startsWith('firestore_targets_') || 
+        key.startsWith('firestore_offline_') || 
+        key.includes('ai-studio-bf578380-822c-4e9e-ab4d-6aae72eb23d9')
+      )) {
+        window.localStorage.removeItem(key);
+      }
+    }
+  }
+} catch (e) {
+  console.warn("Unable to clear stale internal Firestore cache keys:", e);
+}
 
 const app = initializeApp(firebaseConfig);
 const db = initializeFirestore(app, {
-  experimentalForceLongPolling: true
+  experimentalForceLongPolling: true,
+  localCache: memoryLocalCache()
 }, firebaseConfig.firestoreDatabaseId);
 const auth = getAuth(app);
+const storage = getStorage(app);
 
 // Messaging initialization
 let messaging = null;
@@ -68,15 +90,5 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 // CRITICAL: Validate connection to Firestore
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if(error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. The client is offline.");
-    }
-  }
-}
-testConnection();
-
-export { db, auth, app, messaging };
+// (Removed to avoid triggering unhandled quota exception loops)
+export { db, auth, app, messaging, storage };

@@ -10,6 +10,7 @@ import Dashboard from './components/Dashboard';
 import LiveMap from './components/LiveMap';
 import AddCustomer from './components/AddCustomer';
 import CustomerManagement from './components/CustomerManagement';
+import CompanyManagement from './components/CompanyManagement';
 import FleetInventory from './components/FleetInventory';
 import FleetMaintenance from './components/FleetMaintenance';
 import RentalAgreement from './components/RentalAgreement';
@@ -20,6 +21,7 @@ import RenterTracker from './components/RenterTracker';
 import ReservationManagement from './components/ReservationManagement';
 import SystemSettings from './components/SystemSettings';
 import Login from './components/Login';
+import AIAssistant from './components/AIAssistant';
 import { AlertCircle } from 'lucide-react';
 import { NotificationProvider } from './context/NotificationContext';
 import { auth, db } from './firebase';
@@ -39,6 +41,8 @@ import PaymentRefunds from './components/PaymentRefunds';
 import RepairStatus from './components/RepairStatus';
 import InspectionForm from './components/InspectionForm';
 import IncidentReport from './components/IncidentReport';
+import KnowledgeBase from './components/KnowledgeBase';
+import BackgroundTasks from './components/BackgroundTasks';
 
 export default function App() {
   const [user, setUser] = React.useState<User | null>(null);
@@ -47,6 +51,30 @@ export default function App() {
   const [activeView, setActiveView] = React.useState('dashboard');
 
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
+  const [theme, setTheme] = React.useState<'light' | 'dark'>(() => {
+    try {
+      const saved = localStorage.getItem('theme');
+      return (saved === 'light' || saved === 'dark') ? saved : 'dark';
+    } catch (e) {
+      return 'dark';
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      const root = document.documentElement;
+      if (theme === 'light') {
+        root.classList.add('light');
+        root.style.colorScheme = 'light';
+      } else {
+        root.classList.remove('light');
+        root.style.colorScheme = 'dark';
+      }
+      localStorage.setItem('theme', theme);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [theme]);
 
   React.useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -94,7 +122,7 @@ export default function App() {
   const renderView = () => {
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard setView={setActiveView} />;
       case 'finance':
         return <Finance />;
       case 'users':
@@ -111,6 +139,10 @@ export default function App() {
         return <FleetMaintenance />;
       case 'customers':
         return <CustomerManagement />;
+      case 'customers-archive':
+        return <CustomerManagement isArchive={true} />;
+      case 'companies':
+        return <CompanyManagement />;
       case 'fleet-inventory':
         return <FleetInventory setView={setActiveView} />;
       case 'vehicle-history':
@@ -161,6 +193,8 @@ export default function App() {
         return <InsuranceClaims />;
       case 'settings':
         return <SystemSettings user={user} />;
+      case 'knowledge-base':
+        return <KnowledgeBase />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-[60vh] text-center space-y-4">
@@ -178,11 +212,12 @@ export default function App() {
 
   return (
     <NotificationProvider>
+      <BackgroundTasks />
       <div className="min-h-screen bg-[#09090b] text-[#fafafa] font-sans selection:bg-blue-600 selection:text-white flex overflow-hidden">
         <Sidebar activeView={activeView} setView={(v) => { setActiveView(v); setIsMobileOpen(false); }} isMobileOpen={isMobileOpen} setIsMobileOpen={setIsMobileOpen} />
         
         <main className="flex-1 min-h-screen transition-all duration-300 flex flex-col h-screen md:ml-16 lg:ml-64 w-full relative">
-          <Header activeView={activeView} onMenuClick={() => setIsMobileOpen(true)} />
+          <Header activeView={activeView} onMenuClick={() => setIsMobileOpen(true)} onNewAction={(view) => setActiveView(view)} theme={theme} setTheme={setTheme} />
           
           <div className="flex-1 overflow-auto bg-[#09090b]">
             <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto pb-24">
@@ -190,6 +225,8 @@ export default function App() {
             </div>
           </div>
         </main>
+
+        <AIAssistant activeView={activeView} />
 
         <div className="fixed inset-0 pointer-events-none opacity-[0.03] contrast-150 brightness-150 z-[100] grain" />
       </div>

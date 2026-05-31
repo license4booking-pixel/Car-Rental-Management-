@@ -44,9 +44,11 @@ interface LedgerBases {
 export default function Finance() {
   const [activeTab, setActiveTab] = useState<'overview' | 'reports' | 'transactions'>('overview');
   const [downloading, setDownloading] = useState(false);
+  const [dateRange, setDateRange] = useState<'all' | '7days' | '14days' | '30days'>('all');
 
   // Raw fetched Firestore lists
   const [reservations, setReservations] = useState<any[]>([]);
+  const [rentalPayments, setRentalPayments] = useState<any[]>([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState<any[]>([]);
   const [customTransactions, setCustomTransactions] = useState<CustomTransaction[]>([]);
   const [ledgerBases, setLedgerBases] = useState<LedgerBases>({
@@ -93,10 +95,16 @@ export default function Finance() {
       }
     });
 
-    // 2. Sync Reservations for automatic revenue sums
+    // 2. Sync Reservations
     const qReservations = query(collection(db, 'reservations'));
     const unsubReservations = onSnapshot(qReservations, (snap) => {
       setReservations(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // 2.5 Sync Rental Payments for actual cash inflows
+    const qPayments = query(collection(db, 'rental_payments'));
+    const unsubPayments = onSnapshot(qPayments, (snap) => {
+      setRentalPayments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     // 3. Sync Maintenance costs
@@ -118,6 +126,7 @@ export default function Finance() {
     return () => {
       unsubBases();
       unsubReservations();
+      unsubPayments();
       unsubLogs();
       unsubTransactions();
     };
@@ -138,37 +147,67 @@ export default function Finance() {
   };
 
   // FINANCIAL AGGREGATIONS -- ALL ADDING UP LIVE
-  // 1. Net Revenue: baseRevenue + Active Contracts amount + Ledger transactions of 'revenue'
-  const activeContractsRevenue = reservations
-    .filter(res => res.status === 'confirmed' || res.status === 'active' || res.status === 'completed')
-    .reduce((sum, res) => sum + (Number(res.totalAmount) || 0), 0);
+  const isWithinDateRange = (dateVal: any) => {
+    if (dateRange === 'all') return true;
+    if (!dateVal) return false;
+    let d: Date;
+    if (dateVal.toDate) {
+      d = dateVal.toDate();
+    } else {
+      d = new Date(dateVal);
+    }
+    if (isNaN(d.getTime())) return false;
+    
+    const now = new Date();
+    const diffTime = now.getTime() - d.getTime();
+    if (diffTime < 0) return true; // Future dates are counted, or just handle normally
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+    
+    if (dateRange === '7days') return diffDays <= 7;
+    if (dateRange === '14days') return diffDays <= 14;
+    if (dateRange === '30days') return diffDays <= 30;
+    return true;
+  };
 
-  const customRevenueSum = customTransactions
+  const filteredPayments = rentalPayments.filter(p => isWithinDateRange(p.date || p.createdAt));
+  const filteredCustomTransactions = customTransactions.filter(tx => isWithinDateRange(tx.date || tx.createdAt));
+  const filteredReservations = reservations.filter(r => isWithinDateRange(r.startDate || r.createdAt));
+  const filteredMaintenanceLogs = maintenanceLogs.filter(log => isWithinDateRange(log.scheduledDate || log.createdAt));
+
+  // 1. Net Revenue: baseRevenue + Actual Paid Rental Amounts + Ledger transactions of 'revenue'
+  const activeContractsRevenue = filteredPayments
+    .filter(p => p.status === 'paid' || p.status === 'completed')
+    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+  const customRevenueSum = filteredCustomTransactions
     .filter(tx => tx.type === 'revenue')
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
 
-  const finalRevenue = ledgerBases.revenueBase + activeContractsRevenue + customRevenueSum;
+  const appliedBaseRev = dateRange === 'all' ? ledgerBases.revenueBase : 0;
+  const finalRevenue = appliedBaseRev + activeContractsRevenue + customRevenueSum;
 
   // 2. Outstanding Balance: baseOutstanding + Pending/held-deposit amounts + Ledger transactions of 'outstanding'
-  const activeOutstandingRentals = reservations
+  const activeOutstandingRentals = filteredReservations
     .filter(res => res.status === 'quote' || res.depositStatus === 'held')
     .reduce((sum, res) => sum + (Number(res.totalAmount) || 0), 0);
 
-  const customOutstandingSum = customTransactions
+  const customOutstandingSum = filteredCustomTransactions
     .filter(tx => tx.type === 'outstanding')
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
 
-  const finalOutstanding = ledgerBases.outstandingBase + activeOutstandingRentals + customOutstandingSum;
+  const appliedBaseOut = dateRange === 'all' ? ledgerBases.outstandingBase : 0;
+  const finalOutstanding = appliedBaseOut + activeOutstandingRentals + customOutstandingSum;
 
   // 3. Operating Costs: baseOpsCost + Maintenance cost sums + Ledger transactions of 'ops_cost'
-  const activeMaintenanceCost = maintenanceLogs
+  const activeMaintenanceCost = filteredMaintenanceLogs
     .reduce((sum, log) => sum + (Number(log.cost) || 0), 0);
 
-  const customOpsCostSum = customTransactions
+  const customOpsCostSum = filteredCustomTransactions
     .filter(tx => tx.type === 'ops_cost')
     .reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
 
-  const finalOpsCosts = ledgerBases.opsCostBase + activeMaintenanceCost + customOpsCostSum;
+  const appliedBaseOps = dateRange === 'all' ? ledgerBases.opsCostBase : 0;
+  const finalOpsCosts = appliedBaseOps + activeMaintenanceCost + customOpsCostSum;
 
   // 4. EBITDA = revenue - costs
   const finalEBITDA = finalRevenue - finalOpsCosts;
@@ -191,12 +230,12 @@ export default function Finance() {
     ];
 
     // Overlay database records on baseline
-    reservations.forEach(res => {
-      const mLabel = parseDateToMonthStr(res.startDate);
+    rentalPayments.forEach(p => {
+      const mLabel = parseDateToMonthStr(p.date || p.createdAt);
       if (mLabel) {
         const index = historicalBase.findIndex(item => item.month === mLabel);
-        if (index !== -1 && (res.status === 'confirmed' || res.status === 'active' || res.status === 'completed')) {
-          historicalBase[index].revenue += (Number(res.totalAmount) || 0);
+        if (index !== -1 && (p.status === 'paid' || p.status === 'completed')) {
+          historicalBase[index].revenue += (Number(p.amount) || 0);
         }
       }
     });
@@ -316,9 +355,24 @@ export default function Finance() {
           <p className="text-zinc-500 text-sm mt-1">Cashflow, baseline targets, and real-time transaction auditing.</p>
         </div>
         
-        {/* Navigation Tabs */}
-        <div className="flex bg-[#111113] border border-[#27272a] rounded-xl p-1 self-start sm:self-auto shrink-0">
-          <button 
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-[#09090b] border border-[#27272a] rounded-xl px-3 py-1.5 h-[40px]">
+             <ListFilter size={14} className="text-zinc-500" />
+             <select 
+               value={dateRange} 
+               onChange={e => setDateRange(e.target.value as any)}
+               className="bg-transparent border-none outline-none text-[10px] font-black uppercase tracking-widest text-zinc-300 custom-select cursor-pointer"
+             >
+                <option value="all">All Time</option>
+                <option value="7days">Last 7 Days</option>
+                <option value="14days">Last 14 Days</option>
+                <option value="30days">Last 30 Days</option>
+             </select>
+          </div>
+  
+          {/* Navigation Tabs */}
+          <div className="flex bg-[#111113] border border-[#27272a] rounded-xl p-1 self-start sm:self-auto shrink-0 h-[40px]">
+            <button 
             onClick={() => setActiveTab('overview')}
             className={cn(
               "px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all", 
@@ -345,6 +399,7 @@ export default function Finance() {
           >
             Custom Listings ({customTransactions.length})
           </button>
+        </div>
         </div>
       </div>
 
@@ -376,7 +431,7 @@ export default function Finance() {
                 </div>
               </div>
               <p className="text-[8px] text-zinc-600 font-mono pt-1">
-                Base Override: {formatCurrency(ledgerBases.revenueBase)} (Live Jobs +{formatCurrency(activeContractsRevenue)})
+                Base Override: {formatCurrency(ledgerBases.revenueBase)} (Paid Invoices +{formatCurrency(activeContractsRevenue)})
               </p>
             </div>
 
@@ -472,9 +527,9 @@ export default function Finance() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                 <div className="p-3 bg-zinc-900/40 border border-[#1f1f22] rounded-xl">
-                  <p className="text-zinc-500 font-mono text-[9px] uppercase tracking-wider">Active Rentals Subtotal</p>
+                  <p className="text-zinc-500 font-mono text-[9px] uppercase tracking-wider">Paid Rentals Subtotal</p>
                   <p className="text-sm font-bold text-white mt-1">{formatCurrency(activeContractsRevenue)}</p>
-                  <p className="text-[9px] text-zinc-600 mt-1">From db/reservations</p>
+                  <p className="text-[9px] text-zinc-600 mt-1">From db/rental_payments</p>
                 </div>
                 <div className="p-3 bg-zinc-900/40 border border-[#1f1f22] rounded-xl">
                   <p className="text-zinc-500 font-mono text-[9px] uppercase tracking-wider">Active Maintenance</p>
@@ -560,7 +615,7 @@ export default function Finance() {
                  <p className="text-lg font-black text-white mt-1">{formatCurrency(ledgerBases.revenueBase)}</p>
                </div>
                <div className="p-4 bg-zinc-900/30 rounded-xl">
-                 <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Cumulative Dynamic Jobs</p>
+                 <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Cumulative Paid Invoices</p>
                  <p className="text-lg font-black text-blue-400 mt-1">+{formatCurrency(activeContractsRevenue)}</p>
                </div>
                <div className="p-4 bg-zinc-900/30 rounded-xl">
